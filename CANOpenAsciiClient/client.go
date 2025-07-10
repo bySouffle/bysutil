@@ -1,8 +1,9 @@
-package canopenasciiclient
+package CANOpenAscii
 
 import (
 	"bufio"
 	"fmt"
+	"github.com/go-kratos/kratos/v2/log"
 	"net"
 	"regexp"
 	"sync"
@@ -42,7 +43,7 @@ func (c *CANOpenClient) Connect() error {
 	}
 	c.conn = conn
 	c.connected = true
-	fmt.Printf("Connected to CANOpen gateway at %s:%d\n", c.host, c.port)
+	log.Infof("[CANOpen] Connected to CANOpen gateway at %s:%d\n", c.host, c.port)
 
 	// 启动接收协程
 	c.wg.Add(1)
@@ -58,7 +59,7 @@ func (c *CANOpenClient) Disconnect() {
 	}
 	close(c.responses)
 	c.wg.Wait()
-	fmt.Println("Disconnected from CANOpen gateway")
+	log.Infof("[CANOpen] Disconnected from CANOpen gateway")
 }
 
 // receive 异步接收并解析网关响应
@@ -69,7 +70,7 @@ func (c *CANOpenClient) receive() {
 		data, err := reader.ReadString('\n')
 		if err != nil {
 			if c.connected {
-				fmt.Printf("Receive error: %v\n", err)
+				log.Errorf("[CANOpen] Receive error: %v\n", err)
 				c.connected = false
 			}
 			break
@@ -78,7 +79,6 @@ func (c *CANOpenClient) receive() {
 		c.responseMu.Lock()
 		c.responses <- resp
 		c.responseMu.Unlock()
-		fmt.Printf("Received: %s", data)
 	}
 }
 
@@ -136,9 +136,9 @@ func (c *CANOpenClient) SendCommand(cmd Command) (CommandResult, error) {
 		command := fmt.Sprintf("%s\r\n", cmd.Content)
 		_, err = c.conn.Write([]byte(command))
 		if err != nil {
-			return CommandResult{Command: cmd}, fmt.Errorf("send error (attempt %d): %v", attempts, err)
+			sendErr := fmt.Errorf("send error (attempt %d): %v", attempts, err)
+			return CommandResult{Command: cmd, Error: sendErr}, sendErr
 		}
-		fmt.Printf("Sent (attempt %d): %s", attempts, command)
 
 		// 等待响应
 		select {
@@ -152,12 +152,12 @@ func (c *CANOpenClient) SendCommand(cmd Command) (CommandResult, error) {
 		}
 
 		if attempts <= cmd.MaxRetries {
-			fmt.Printf("Retrying command %d (%d/%d) due to: %v\n", cmd.CommandID, attempts, cmd.MaxRetries, err)
+			log.Infof("[CANOpen] Retrying command %d (%d/%d) due to: %v\n", cmd.CommandID, attempts, cmd.MaxRetries, err)
 			time.Sleep(100 * time.Millisecond) // 重试间隔
 		}
 	}
-
-	return CommandResult{Command: cmd, Response: resp}, fmt.Errorf("failed after %d attempts: %v", attempts-1, err)
+	errRetry := fmt.Errorf("failed after %d attempts: %v", attempts-1, err)
+	return CommandResult{Command: cmd, Response: resp, Error: errRetry}, errRetry
 }
 
 // SendMultipleCommands 并发发送多条命令
@@ -165,10 +165,11 @@ func (c *CANOpenClient) SendMultipleCommands(commands []Command) []CommandResult
 	var results []CommandResult
 	for _, cmd := range commands {
 		result, err := c.SendCommand(cmd)
-		if err != nil {
-			fmt.Printf("Command %d failed: %v\n", cmd.CommandID, err)
-		}
 		results = append(results, result)
+		if err != nil {
+			log.Errorf("[CANOpen] Command %d failed: %v\n", cmd.CommandID, err)
+			break
+		}
 	}
 
 	return results

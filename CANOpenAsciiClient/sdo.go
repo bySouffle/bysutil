@@ -1,4 +1,4 @@
-package canopenasciiclient
+package CANOpenAscii
 
 import (
 	"fmt"
@@ -7,8 +7,8 @@ import (
 
 //Datatypes:
 //b                  # Boolean.
-//i8, i16, i32, i64  # Signed integers.
-//u8, u16, u32, u64  # Unsigned integers.
+//I8, i16, i32, i64  # Signed integers.
+//U8, U16, U32, U64  # Unsigned integers.
 //x8, x16, x32, x64  # Unsigned integers, displayed as hexadecimal, non-standard.
 //r32, r64           # Real numbers.
 //t, td              # Time of day, time difference.
@@ -18,35 +18,35 @@ import (
 //hex                # Hexagonal data, optionally space separated, non-standard.
 
 const (
-	i8  = "i8"
-	i16 = "i16"
-	i32 = "i32"
-	i64 = "i64"
+	I8  = "I8"
+	I16 = "i16"
+	I32 = "i32"
+	I64 = "i64"
 
-	u8  = "u8"
-	u16 = "u16"
-	u32 = "u32"
-	u64 = "u64"
+	U8  = "U8"
+	U16 = "U16"
+	U32 = "U32"
+	U64 = "U64"
 
-	x8  = "x8"
-	x16 = "x16"
-	x32 = "x32"
-	x64 = "x64"
+	X8  = "x8"
+	X16 = "x16"
+	X32 = "x32"
+	X64 = "x64"
 
-	r32 = "r32"
-	r64 = "r64"
+	R32 = "r32"
+	R64 = "r64"
 
-	t  = "t"
-	td = "td"
+	T  = "t"
+	TD = "td"
 
-	vs = "vs"
+	VS = "vs"
 
-	os = "os"
-	us = "us"
+	OS = "os"
+	US = "us"
 
-	d = "d"
+	D = "d"
 
-	hex = "hex"
+	HEX = "hex"
 )
 
 //Command strings start with '"["<sequence>"]"' followed by:
@@ -54,21 +54,21 @@ const (
 //[<node>] w[rite] <index> <subindex> <datatype> <value> # SDO download.
 
 // ReadSDO 生成读取 SDO 的命令
-func ReadSDO(cmdID int, nodeID, index, subindex int, dataType dataType, timeout time.Duration, retries int) Command {
+func ReadSDO(cmdID int, nodeID, index, subindex int, dataType DataType, timeout time.Duration, retries int) Command {
 	return Command{
 		CommandID:  cmdID,
 		NodeID:     nodeID,
 		Index:      index,
 		SubIndex:   subindex,
 		DataType:   dataType,
-		Content:    fmt.Sprintf("[%d] %d r %#x %x %s ", cmdID, nodeID, index, subindex, dataType),
+		Content:    fmt.Sprintf("[%d] %d r %#x %x %s", cmdID, nodeID, index, subindex, dataType),
 		Timeout:    timeout,
 		MaxRetries: retries,
 	}
 }
 
 // WriteSDO 生成写入 SDO 的命令
-func WriteSDO(cmdID int, nodeID, index, subindex int, value, dataType dataType, timeout time.Duration, retries int) Command {
+func WriteSDO(cmdID int, nodeID, index, subindex int, value, dataType DataType, timeout time.Duration, retries int) Command {
 	return Command{
 		CommandID:  cmdID,
 		Content:    fmt.Sprintf("[%d] %d w %#x %x %s %s", cmdID, nodeID, index, subindex, dataType, value),

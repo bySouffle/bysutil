@@ -1,4 +1,4 @@
-package canopenasciiclient
+package CANOpenAscii
 
 import (
 	"fmt"

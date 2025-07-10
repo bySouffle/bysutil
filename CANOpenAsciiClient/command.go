@@ -1,8 +1,8 @@
-package canopenasciiclient
+package CANOpenAscii
 
 import "time"
 
-type dataType string
+type DataType string
 
 // Command 代表一条 CANOpen 指令
 type Command struct {
@@ -10,7 +10,7 @@ type Command struct {
 	NodeID     int
 	Index      int
 	SubIndex   int
-	DataType   dataType
+	DataType   DataType
 	Content    string        // 指令内容，如 "[1] r 1000 0"
 	Timeout    time.Duration // 命令超时
 	MaxRetries int           // 最大重试次数

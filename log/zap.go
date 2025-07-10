@@ -1,8 +1,8 @@
 package log
 
 import (
-	"InspectionRobot/pkg/utils"
 	"fmt"
+	"github.com/bySouffle/bysutil/utils"
 	klog "github.com/go-kratos/kratos/v2/log"
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"go.uber.org/zap"
