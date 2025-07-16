@@ -6,32 +6,54 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 	"net"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
 
-//	CO_CANOpen_309_3
+// CO_CANOpen_309_3
+
+// regexp
+var (
+	// 标准错误响应：! code message
+	errorRe = regexp.MustCompile(`! (\d+) (.+)`)
+	// 非标准错误响应：[NodeId] ERROR:code #message，支持十进制和十六进制
+	nonStandardErrorRe = regexp.MustCompile(`\[(\d+)] ERROR:(0x[0-9a-fA-F]+|\d+) #(.+)`)
+	// 成功响应正则表达式
+	//	[NodeID] OK
+	okRe = regexp.MustCompile(`\[(\d+)] OK`)
+	//	[1] r = 1234
+	cmdValueRe = regexp.MustCompile(`\[(\d+)] \w+ = (.+)`)
+	//
+	cmdOkRe = regexp.MustCompile(`\[(\d+)] \w+ OK`)
+	//	[1] 01 00 00 00
+	hexValuesRe = regexp.MustCompile(`\[(\d+)] ((?:[0-9a-fA-F]{2}\s*)+)`)
+	//	[1]	0
+	simpleValueRe = regexp.MustCompile(`\[(\d+)] (\d+)`)
+)
 
 // CANOpenClient 代表 CANOpen 客户端
 type CANOpenClient struct {
-	conn       net.Conn
-	connected  bool
-	responses  chan Response
-	mutex      sync.Mutex
-	host       string
-	port       int
-	timeout    time.Duration
-	wg         sync.WaitGroup
-	responseMu sync.Mutex
+	conn          net.Conn
+	connected     bool
+	responses     chan Response
+	mutex         sync.Mutex
+	host          string
+	port          int
+	timeout       time.Duration
+	retryInterval time.Duration
+	wg            sync.WaitGroup
+	responseMu    sync.Mutex
 }
 
 // NewCANOpenClient 创建新的 CANOpen 客户端
-func NewCANOpenClient(host string, port int, timeout time.Duration) *CANOpenClient {
+func NewCANOpenClient(host string, port int, timeout, retryInterval time.Duration) *CANOpenClient {
 	return &CANOpenClient{
-		host:      host,
-		port:      port,
-		timeout:   timeout,
-		responses: make(chan Response, 100), // 响应缓冲区
+		host:          host,
+		port:          port,
+		timeout:       timeout,
+		retryInterval: retryInterval,
+		responses:     make(chan Response, 100), // 响应缓冲区
 	}
 }
 
@@ -75,6 +97,7 @@ func (c *CANOpenClient) receive() {
 			}
 			break
 		}
+		data = strings.TrimRight(data, "\r\n")
 		resp := c.parseResponse(data)
 		c.responseMu.Lock()
 		c.responses <- resp
@@ -85,15 +108,6 @@ func (c *CANOpenClient) receive() {
 // parseResponse 解析 CiA 309-3 响应
 func (c *CANOpenClient) parseResponse(data string) Response {
 	resp := Response{Raw: data}
-	// 标准错误响应：! code message
-	errorRe := regexp.MustCompile(`! (\d+) (.+)`)
-	// 非标准错误响应：[NodeId] ERROR:code #message，支持十进制和十六进制
-	nonStandardErrorRe := regexp.MustCompile(`\[(\d+)\] ERROR:(0x[0-9a-fA-F]+|\d+) #(.+)`)
-	// 成功响应正则表达式
-	okRe := regexp.MustCompile(`\[(\d+)\] OK`)
-	cmdValueRe := regexp.MustCompile(`\[(\d+)\] \w+ = (.+)`)
-	cmdOkRe := regexp.MustCompile(`\[(\d+)\] \w+ OK`)
-	hexValuesRe := regexp.MustCompile(`\[(\d+)\] ((?:[0-9a-fA-F]{2}\s*)+)`)
 
 	if matches := nonStandardErrorRe.FindStringSubmatch(data); matches != nil {
 		resp.IsError = true
@@ -116,6 +130,9 @@ func (c *CANOpenClient) parseResponse(data string) Response {
 	} else if matches := hexValuesRe.FindStringSubmatch(data); matches != nil {
 		resp.CommandID = matches[1]
 		resp.Value = matches[2]
+	} else if matches := simpleValueRe.FindStringSubmatch(data); matches != nil {
+		resp.CommandID = matches[1]
+		resp.Value = matches[2]
 	}
 	return resp
 }
@@ -123,7 +140,8 @@ func (c *CANOpenClient) parseResponse(data string) Response {
 // SendCommand 发送单条命令，支持重试
 func (c *CANOpenClient) SendCommand(cmd Command) (CommandResult, error) {
 	if !c.connected {
-		return CommandResult{Command: cmd}, fmt.Errorf("not connected to gateway")
+		errConn := fmt.Errorf("not connected to gateway")
+		return CommandResult{Command: cmd, Error: errConn}, errConn
 	}
 
 	var resp Response
@@ -153,7 +171,7 @@ func (c *CANOpenClient) SendCommand(cmd Command) (CommandResult, error) {
 
 		if attempts <= cmd.MaxRetries {
 			log.Infof("[CANOpen] Retrying command %d (%d/%d) due to: %v\n", cmd.CommandID, attempts, cmd.MaxRetries, err)
-			time.Sleep(100 * time.Millisecond) // 重试间隔
+			time.Sleep(c.retryInterval) // 重试间隔
 		}
 	}
 	errRetry := fmt.Errorf("failed after %d attempts: %v", attempts-1, err)
@@ -167,7 +185,7 @@ func (c *CANOpenClient) SendMultipleCommands(commands []Command) []CommandResult
 		result, err := c.SendCommand(cmd)
 		results = append(results, result)
 		if err != nil {
-			log.Errorf("[CANOpen] Command %d failed: %v\n", cmd.CommandID, err)
+			log.Errorf("[CANOpen] [Break] Command %d failed: %v\n", cmd.CommandID, err)
 			break
 		}
 	}
