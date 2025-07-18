@@ -23,13 +23,13 @@ var (
 	//	[NodeID] OK
 	okRe = regexp.MustCompile(`\[(\d+)] OK`)
 	//	[1] r = 1234
-	cmdValueRe = regexp.MustCompile(`\[(\d+)] \w+ = (.+)`)
+	cmdValueRe = regexp.MustCompile(`\[(\d+)] \w+ = (-?\d+|.+)`)
 	//
 	cmdOkRe = regexp.MustCompile(`\[(\d+)] \w+ OK`)
 	//	[1] 01 00 00 00
 	hexValuesRe = regexp.MustCompile(`\[(\d+)] ((?:[0-9a-fA-F]{2}\s*)+)`)
 	//	[1]	0
-	simpleValueRe = regexp.MustCompile(`\[(\d+)] (\d+)`)
+	simpleValueRe = regexp.MustCompile(`\[(\d+)] (-?\d+)`)
 )
 
 // CANOpenClient 代表 CANOpen 客户端

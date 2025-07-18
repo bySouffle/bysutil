@@ -25,6 +25,7 @@ func TestNewCANOpenClient(t *testing.T) {
 			WriteSDO(1, 4, 0x6040, 0, "8", "U16", 300*time.Millisecond, 1), // 写入 SDO，超时 300ms，重试 1 次
 			SetNMTState(3, 4, MNT_Start, 100*time.Millisecond, 0),          // 设置 NMT，超时 100ms，无重试
 			ReadSDO(1, 12, 0x606c, 0, U32, 200*time.Millisecond, 1),
+			ReadSDO(1, 12, 0x6064, 0, I32, 200*time.Millisecond, 1),
 		}
 
 		// 并发发送指令
